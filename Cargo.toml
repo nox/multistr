@@ -1,6 +1,6 @@
 [package]
 name = "multistr"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Clar Charr <clar@charr.xyz>"]
 repository = "https://github.com/clarcharr/multistr"
 documentation = "https://clarcharr.github.io/multistr/multistr/"
