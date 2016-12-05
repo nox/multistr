@@ -129,12 +129,7 @@ impl StringVec {
             *idx -= split_idx;
         }
 
-        let new_buffer;
-        {
-            let (_, buf) = self.buffer.split_at(at);
-            new_buffer = String::from(buf);
-        }
-        self.buffer.truncate(split_idx);
+        let new_buffer = self.buffer.split_off(at);
         StringVec {
             buffer: new_buffer,
             split: new_split,
@@ -242,7 +237,7 @@ impl Index<RangeFull> for StringVec {
     }
 }
 
-#[cfg(inclusive_range)]
+#[cfg(feature = "inclusive_range")]
 impl Index<RangeInclusive<usize>> for StringVec {
     type Output = str;
     #[inline]
@@ -256,7 +251,7 @@ impl Index<RangeInclusive<usize>> for StringVec {
     }
 }
 
-#[cfg(inclusive_range)]
+#[cfg(feature = "inclusive_range")]
 impl Index<RangeToInclusive<usize>> for StringVec {
     type Output = str;
     #[inline]
@@ -341,9 +336,33 @@ impl fmt::Debug for StringVec {
     }
 }
 
+#[macro_export]
+macro_rules! string_vec {
+    ( $($x:expr),* ) => {
+        {
+            let mut temp = StringVec::new();
+            $(
+                temp.push($x);
+            )*
+            temp
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn slice() {
+        let v = string_vec!["hello", "world", "!"];
+        assert_eq!(v[2], "!");
+        assert_eq!(v[..2], "helloworld");
+        assert_eq!(v[1..], "world!");
+        assert_eq!(v[1..2], "world");
+        assert_eq!(v[..], "helloworld!");
+        assert_eq!(v[...1], "helloworld");
+        assert_eq!(v[1...2], "world!");
+    }
 
     quickcheck! {
         fn partial_ord(v1: Vec<String>, v2: Vec<String>) -> bool {

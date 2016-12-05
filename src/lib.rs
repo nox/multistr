@@ -1,4 +1,4 @@
-#![feature(field_init_shorthand, ordering_chaining)]
+#![feature(field_init_shorthand, ordering_chaining, string_split_off)]
 
 #![cfg_attr(test, feature(inclusive_range, plugin))]
 #![cfg_attr(test, plugin(clippy))]
