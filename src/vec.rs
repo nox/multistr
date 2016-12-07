@@ -260,6 +260,7 @@ impl Index<RangeToInclusive<usize>> for StringVec {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Iter<'a> {
     inner: &'a StringVec,
     idx: usize,
@@ -277,6 +278,7 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct IntoIter {
     inner: StringVec,
     idx: usize,
