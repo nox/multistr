@@ -1,6 +1,6 @@
 [package]
 name = "multistr"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Clar Charr <clar@charr.xyz>"]
 repository = "https://github.com/clarcharr/multistr"
 documentation = "https://clarcharr.github.io/multistr/multistr/"
@@ -12,3 +12,6 @@ exclude = [".gitignore"]
 [dev-dependencies]
 clippy = "^0.0"
 quickcheck = "0.3"
+
+[features]
+inclusive_range = []

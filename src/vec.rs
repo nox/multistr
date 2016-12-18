@@ -3,7 +3,7 @@ use std::ops::{Index, Range, RangeFrom, RangeFull, RangeTo};
 use std::fmt;
 use std::iter::FromIterator;
 
-#[cfg(inclusive_range)]
+#[cfg(any(inclusive_range, test))]
 use std::ops::{RangeInclusive, RangeToInclusive};
 
 /// Vec of immutable strings stored on the heap in the same buffer.
@@ -237,7 +237,7 @@ impl Index<RangeFull> for StringVec {
     }
 }
 
-#[cfg(feature = "inclusive_range")]
+#[cfg(any(inclusive_range, test))]
 impl Index<RangeInclusive<usize>> for StringVec {
     type Output = str;
     #[inline]
@@ -251,7 +251,7 @@ impl Index<RangeInclusive<usize>> for StringVec {
     }
 }
 
-#[cfg(feature = "inclusive_range")]
+#[cfg(any(inclusive_range, test))]
 impl Index<RangeToInclusive<usize>> for StringVec {
     type Output = str;
     #[inline]
@@ -355,15 +355,16 @@ macro_rules! string_vec {
 mod tests {
     use super::*;
 
+    #[test]
     fn slice() {
         let v = string_vec!["hello", "world", "!"];
-        assert_eq!(v[2], "!");
-        assert_eq!(v[..2], "helloworld");
-        assert_eq!(v[1..], "world!");
-        assert_eq!(v[1..2], "world");
-        assert_eq!(v[..], "helloworld!");
-        assert_eq!(v[...1], "helloworld");
-        assert_eq!(v[1...2], "world!");
+        assert_eq!(&v[2], "!");
+        assert_eq!(&v[..2], "helloworld");
+        assert_eq!(&v[1..], "world!");
+        assert_eq!(&v[1..2], "world");
+        assert_eq!(&v[..], "helloworld!");
+        assert_eq!(&v[...1], "helloworld");
+        assert_eq!(&v[1...2], "world!");
     }
 
     quickcheck! {
