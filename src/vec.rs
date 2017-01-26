@@ -17,7 +17,7 @@ pub struct StringVec {
 
 impl<S: AsRef<str>> FromIterator<S> for StringVec {
     #[inline]
-    fn from_iter<T: IntoIterator<Item=S>>(iter: T) -> StringVec {
+    fn from_iter<T: IntoIterator<Item = S>>(iter: T) -> StringVec {
         let mut v = StringVec::new();
         for item in iter {
             v.push(item.as_ref());
@@ -27,7 +27,7 @@ impl<S: AsRef<str>> FromIterator<S> for StringVec {
 }
 impl<S: AsRef<str>> Extend<S> for StringVec {
     #[inline]
-    fn extend<T: IntoIterator<Item=S>>(&mut self, iter: T) {
+    fn extend<T: IntoIterator<Item = S>>(&mut self, iter: T) {
         for item in iter {
             self.push(item.as_ref());
         }
@@ -38,7 +38,10 @@ impl StringVec {
     /// Creates an empty `StringVec`.
     #[inline]
     pub fn new() -> StringVec {
-        StringVec { buffer: String::new(), split: Vec::new() }
+        StringVec {
+            buffer: String::new(),
+            split: Vec::new(),
+        }
     }
 
     /// Creates an empty `StringVec` with the given capacities.
@@ -183,11 +186,7 @@ impl StringVec {
 
     #[inline]
     fn get_start_idx(&self, index: usize) -> usize {
-        if index == 0 {
-            0
-        } else {
-            self.split[index - 1]
-        }
+        if index == 0 { 0 } else { self.split[index - 1] }
     }
 
     #[inline]
@@ -200,7 +199,7 @@ impl Index<usize> for StringVec {
     type Output = str;
     #[inline]
     fn index(&self, index: usize) -> &str {
-        &self.buffer[self.get_start_idx(index) .. self.get_end_idx(index)]
+        &self.buffer[self.get_start_idx(index)..self.get_end_idx(index)]
     }
 }
 
@@ -209,7 +208,7 @@ impl Index<Range<usize>> for StringVec {
     #[inline]
     fn index(&self, index: Range<usize>) -> &str {
         assert!(index.start <= index.end);
-        &self.buffer[self.get_start_idx(index.start) .. self.get_start_idx(index.end)]
+        &self.buffer[self.get_start_idx(index.start)..self.get_start_idx(index.end)]
     }
 }
 
@@ -217,7 +216,7 @@ impl Index<RangeTo<usize>> for StringVec {
     type Output = str;
     #[inline]
     fn index(&self, index: RangeTo<usize>) -> &str {
-        &self.buffer[.. self.get_start_idx(index.end)]
+        &self.buffer[..self.get_start_idx(index.end)]
     }
 }
 
@@ -225,7 +224,7 @@ impl Index<RangeFrom<usize>> for StringVec {
     type Output = str;
     #[inline]
     fn index(&self, index: RangeFrom<usize>) -> &str {
-        &self.buffer[self.get_start_idx(index.start) ..]
+        &self.buffer[self.get_start_idx(index.start)..]
     }
 }
 
@@ -245,7 +244,7 @@ impl Index<RangeInclusive<usize>> for StringVec {
         match index {
             RangeInclusive::Empty { .. } => &self.buffer[..0],
             RangeInclusive::NonEmpty { start, end } => {
-                &self.buffer[self.get_start_idx(start) .. self.get_end_idx(end)]
+                &self.buffer[self.get_start_idx(start)..self.get_end_idx(end)]
             }
         }
     }
@@ -256,7 +255,7 @@ impl Index<RangeToInclusive<usize>> for StringVec {
     type Output = str;
     #[inline]
     fn index(&self, index: RangeToInclusive<usize>) -> &str {
-        &self.buffer[.. self.get_end_idx(index.end)]
+        &self.buffer[..self.get_end_idx(index.end)]
     }
 }
 

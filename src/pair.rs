@@ -25,7 +25,10 @@ impl StringPair {
         let mut buffer = s1;
         buffer.push_str(s2.as_ref());
 
-        StringPair { buffer, split }
+        StringPair {
+            buffer: buffer,
+            split: split,
+        }
     }
 
     /// Creates a `StringPair` from a string and split index.
@@ -33,31 +36,34 @@ impl StringPair {
     pub fn from_raw<S: Into<String>>(string: S, split: usize) -> StringPair {
         let buffer = string.into();
 
-        assert!(split <= buffer.len(), "StrPair: split index was out of bounds");
-        StringPair { buffer, split }
+        assert!(split <= buffer.len(),
+                "StrPair: split index was out of bounds");
+        StringPair {
+            buffer: buffer,
+            split: split,
+        }
     }
 
     /// Creates a `StringPair` from a string and split index without checking the index.
     #[inline]
     pub unsafe fn from_raw_unchecked<S: Into<String>>(string: S, split: usize) -> StringPair {
         let buffer = string.into();
-        StringPair { buffer, split }
+        StringPair {
+            buffer: buffer,
+            split: split,
+        }
     }
 
     /// Gets the first string in the pair.
     #[inline]
     pub fn left(&self) -> &str {
-        unsafe {
-            self.buffer.slice_unchecked(0, self.split)
-        }
+        unsafe { self.buffer.slice_unchecked(0, self.split) }
     }
 
     /// Gets the second string in the pair.
     #[inline]
     pub fn right(&self) -> &str {
-        unsafe {
-            self.buffer.slice_unchecked(self.split, self.buffer.len())
-        }
+        unsafe { self.buffer.slice_unchecked(self.split, self.buffer.len()) }
     }
 }
 
