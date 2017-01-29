@@ -9,6 +9,12 @@ readme = "README.md"
 license-file = "LICENSE"
 exclude = [".gitignore"]
 
+[dependencies]
+bow = "0.1"
+extra-default = "0.1"
+len-trait = { version = "0.2", default-features = false, features = ['collections'] }
+push-trait = { version = "0.3", default-features = false, features = ['collections'] }
+
 [dev-dependencies]
 clippy = "^0.0"
 quickcheck = "0.3"
