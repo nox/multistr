@@ -1,4 +1,4 @@
-#![feature(exclusive_range_pattern, never_type, pub_restricted)]
+#![feature(exclusive_range_pattern, never_type)]
 
 //#![cfg_attr(inclusive_range, feature(inclusive_range, inclusive_range_syntax))]
 //#![cfg_attr(test, feature(inclusive_range, inclusive_range_syntax))]
@@ -9,6 +9,9 @@ extern crate bow;
 extern crate extra_default;
 extern crate len_trait;
 extern crate push_trait;
+
+#[cfg_attr(test, macro_use)]
+extern crate quickcheck;
 
 mod array;
 mod iter;

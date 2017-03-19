@@ -1,9 +1,10 @@
+use std::borrow::BorrowMut;
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Index};
+use std::ops::{Index, IndexMut, Range, RangeTo, RangeFrom, RangeFull};
 
 use bow::Bow;
-use len_trait::Len;
+use len_trait::{Len, IndexRangesMut};
 use push_trait::PushRefBack;
 
 macro_rules! gen_impl {
@@ -12,11 +13,11 @@ macro_rules! gen_impl {
             /// Array of immutable strings stored on the heap in the same buffer.
             pub struct $name<T: $crate::StrLike + ?Sized> {
                 buffer: ::bow::Bow<'static, T::Data>,
-                split: [usize; $n - 1],
+                split: [usize; $n],
             }
 
-            impl<'a, T: $crate::StrLike + ?Sized, S: 'a + AsRef<T>> From<[&'a S; $n]> for $name<T> {
-                fn from(inner: [&'a S; $n]) -> $name<T> {
+            impl<'a, T: $crate::StrLike + ?Sized> From<[&'a T; $n]> for $name<T> {
+                fn from(inner: [&'a T; $n]) -> $name<T> {
                     $name::new(inner)
                 }
             }
@@ -28,9 +29,9 @@ macro_rules! gen_impl {
                     let len = data.len();
                     let mut buffer = data.to_owned();
 
-                    let mut split = [len; $n - 1];
+                    let mut split = [len; $n];
                     let mut acc = 0;
-                    for s in split.iter_mut().take($n - 1) {
+                    for s in split.iter_mut() {
                         *s = acc;
                         acc += len;
                         buffer.push_ref_back(data);
@@ -41,19 +42,19 @@ macro_rules! gen_impl {
 
             impl<T: $crate::StrLike + ?Sized> $name<T> {
                 /// Creates a new `Static` from the given array of values.
-                pub fn new<S: AsRef<T>>(inner: [&S; $n]) -> $name<T> {
-                    let inner: &[&S] = &inner;
+                pub fn new(inner: [&T; $n]) -> $name<T> {
+                    let inner: &[&T] = &inner;
 
                     let mut buffer: T::OwnedData = Default::default();
-                    for item in inner.iter().map(AsRef::as_ref) {
+                    for item in inner.iter() {
                         buffer.push_ref_back(item.to_data());
                     }
                     let buffer: Box<T::Data> = buffer.into();
                     let buffer: Bow<'static, T::Data> = buffer.into();
-                    let mut split = [0; $n - 1];
-                    inner.iter().map(AsRef::as_ref).map(::len_trait::Len::len).enumerate().fold(0, |mut curr, (i, len)| {
-                        split[i] = curr;
+                    let mut split = [0; $n];
+                    inner.iter().map(|s| s.len()).enumerate().fold(0, |mut curr, (i, len)| {
                         curr += len;
+                        split[i] = curr;
                         curr
                     });
 
@@ -62,7 +63,7 @@ macro_rules! gen_impl {
 
                 /// Creates a `Static` from its raw parts: a buffer and a list of split indices.
                 #[inline]
-                pub fn from_raw<D: Into<Bow<'static, T::Data>>>(buffer: D, split: [usize; $n - 1]) -> $name<T> {
+                pub fn from_raw<D: Into<Bow<'static, T::Data>>>(buffer: D, split: [usize; $n]) -> $name<T> {
                     let buffer = buffer.into();
                     let check = $crate::Split::new(&split);
                     check.check_valid(buffer.len())
@@ -76,7 +77,7 @@ macro_rules! gen_impl {
 
                 /// Creates a `Static` from its raw parts (unsafe version).
                 #[inline]
-                pub unsafe fn from_raw_unchecked<D: Into<Bow<'static, T::Data>>>(buffer: D, split: [usize; $n - 1]) -> $name<T> {
+                pub unsafe fn from_raw_unchecked<D: Into<Bow<'static, T::Data>>>(buffer: D, split: [usize; $n]) -> $name<T> {
                     let buffer = buffer.into();
                     $name { buffer, split }
                 }
@@ -88,15 +89,74 @@ macro_rules! gen_impl {
                 }
             }
 
-            impl<T: $crate::StrLike> Index<usize> for $name<T> {
+            impl<T: ?Sized + $crate::StrLike> Index<usize> for $name<T> {
                 type Output = T;
-                fn index(&self, idx: usize) -> &T {
+                fn index(&self, index: usize) -> &T {
+                    assert_ne!(index, $n);
                     unsafe {
                         let split = $crate::Split::new(&self.split);
-                        T::from_data_unchecked(split.get(idx).index_into(&self.buffer))
+                        T::from_data_unchecked(split.get(index).index_into(&self.buffer))
                     }
                 }
             }
+
+            impl<T: ?Sized + $crate::StrLike + $crate::StrLikeMut> IndexMut<usize> for $name<T>
+                where T::Data: IndexRangesMut,
+                      T::OwnedData: BorrowMut<T::Data>
+            {
+                #[inline]
+                fn index_mut(&mut self, index: usize) -> &mut T {
+                    assert_ne!(index, $n);
+                    unsafe {
+                        let idx = $crate::Split::new(&self.split).get(index);
+                        T::from_data_mut_unchecked(idx.index_into_mut(self.buffer.to_mut().borrow_mut()))
+                    }
+                }
+            }
+
+            impl<T: ?Sized + $crate::DataConcat> Index<Range<usize>> for $name<T> {
+                type Output = T;
+                #[inline]
+                fn index(&self, range: Range<usize>) -> &T {
+                    unsafe {
+                        let split = $crate::Split::new(&self.split);
+                        T::from_data_unchecked(split.get_slice(range.into()).index_into(&self.buffer))
+                    }
+                }
+            }
+
+            impl<T: ?Sized + $crate::DataConcat> Index<RangeFrom<usize>> for $name<T> {
+                type Output = T;
+                #[inline]
+                fn index(&self, range: RangeFrom<usize>) -> &T {
+                    unsafe {
+                        let split = $crate::Split::new(&self.split);
+                        T::from_data_unchecked(split.get_slice(range.into()).index_into(&self.buffer))
+                    }
+                }
+            }
+
+            impl<T: ?Sized + $crate::DataConcat> Index<RangeTo<usize>> for $name<T> {
+                type Output = T;
+                #[inline]
+                fn index(&self, range: RangeTo<usize>) -> &T {
+                    unsafe {
+                        let split = $crate::Split::new(&self.split);
+                        T::from_data_unchecked(split.get_slice(range.into()).index_into(&self.buffer))
+                    }
+                }
+            }
+
+            impl<T: ?Sized + $crate::DataConcat> Index<RangeFull> for $name<T> {
+                type Output = T;
+                #[inline]
+                fn index(&self, _: RangeFull) -> &T {
+                    unsafe {
+                        T::from_data_unchecked(&self.buffer)
+                    }
+                }
+            }
+
 
             impl<T: $crate::StrLike + ?Sized> Clone for $name<T>
                 where Box<T::Data>: Clone
@@ -193,4 +253,80 @@ gen_impl! {
     Static14, SliceArray14, StringArray14, CStringArray14, OsStringArray14, 14,
     Static15, SliceArray15, StringArray15, CStringArray15, OsStringArray15, 15,
     Static16, SliceArray16, StringArray16, CStringArray16, OsStringArray16, 16,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::CStr;
+
+    use super::super::StrLike;
+    use super::Static3;
+
+    #[test]
+    fn debug() {
+        let array = Static3::new(["English", "Français", "中文"]);
+        assert_eq!(format!("{:?}", array), r#"["English", "Français", "中文"]"# )
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_oob() {
+        let array = <Static3<[u8]>>::default();
+        let _ = &array[3];
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_oob_str() {
+        let array = <Static3<str>>::default();
+        let _ = &array[3];
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_oob_c_str() {
+        let array = <Static3<CStr>>::default();
+        let _ = &array[3];
+    }
+
+    #[test]
+    fn index() {
+        let array = Static3::new(["English", "Français", "中文"]);
+        assert_eq!(&array[0], "English");
+        assert_eq!(&array[1], "Français");
+        assert_eq!(&array[2], "中文");
+        assert_eq!(&array[0..0], "");
+        assert_eq!(&array[0..1], "English");
+        assert_eq!(&array[0..2], "EnglishFrançais");
+        assert_eq!(&array[0..3], "EnglishFrançais中文");
+        assert_eq!(&array[1..1], "");
+        assert_eq!(&array[1..2], "Français");
+        assert_eq!(&array[1..3], "Français中文");
+        assert_eq!(&array[2..2], "");
+        assert_eq!(&array[2..3], "中文");
+        assert_eq!(&array[3..3], "");
+        assert_eq!(&array[0..], "EnglishFrançais中文");
+        assert_eq!(&array[1..], "Français中文");
+        assert_eq!(&array[2..], "中文");
+        assert_eq!(&array[3..], "");
+        assert_eq!(&array[..0], "");
+        assert_eq!(&array[..1], "English");
+        assert_eq!(&array[..2], "EnglishFrançais");
+        assert_eq!(&array[..3], "EnglishFrançais中文");
+        assert_eq!(&array[..], "EnglishFrançais中文");
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_left_oob() {
+        let array = Static3::new(["English", "Français", "中文"]);
+        let _ = &array[4..];
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_right_oob() {
+        let array = Static3::new(["English", "Français", "中文"]);
+        let _ = &array[..4];
+    }
 }

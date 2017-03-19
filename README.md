@@ -11,7 +11,7 @@ To use in your own project, just add the below to your `Cargo.toml` file.
 
 ```toml
 [dependencies]
-multistr = "0.3"
+multistr = "0.4"
 ```
 
 For more formal documentation, you can find the rustdoc

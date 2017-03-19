@@ -1,16 +1,17 @@
-use std::borrow::Borrow;
+use std::borrow::{Borrow, BorrowMut};
 use std::cmp::Ordering;
 use std::ffi::CStr;
 use std::borrow::Cow;
-use std::ops::Index;
+use std::ops::{Index, IndexMut, Range, RangeTo, RangeFrom, RangeFull};
 use std::fmt;
 use std::iter::FromIterator;
 
 use extra_default::DefaultRef;
-use len_trait::{Capacity, CapacityMut, DefaultCapacity, Len, LenMut, LenZero, SplitOff};
+use len_trait::{Capacity, CapacityMut, DefaultCapacity, Len, LenMut, LenZero, SplitOff, IndexRangesMut};
 use push_trait::PushRefBack;
+use quickcheck::Arbitrary;
 
-use super::{Split, StrLike, Iter};
+use super::{Split, StrLike, Iter, DataConcat, StrLikeMut};
 
 /// Vec of immutable strings stored on the heap in the same buffer.
 ///
@@ -20,15 +21,25 @@ pub struct Dynamic<T: StrLike + ?Sized> {
     split: Vec<usize>,
 }
 
+unsafe impl<T: StrLike + ?Sized> Send for Dynamic<T>
+    where &'static T::Data: Send,
+          T::OwnedData: Send,
+{}
+
+unsafe impl<T: StrLike + ?Sized> Sync for Dynamic<T>
+    where &'static T::Data: Sync,
+          T::OwnedData: Sync,
+{}
+
 impl<T: StrLike + ?Sized> Default for Dynamic<T> {
     fn default() -> Dynamic<T> {
         Dynamic::new()
     }
 }
 
-impl<'a, T: StrLike + ?Sized, S: 'a + AsRef<T>> FromIterator<&'a S> for Dynamic<T> {
+impl<'a, T: StrLike + ?Sized> FromIterator<&'a T> for Dynamic<T> {
     #[inline]
-    fn from_iter<I: IntoIterator<Item = &'a S>>(iter: I) -> Dynamic<T> {
+    fn from_iter<I: IntoIterator<Item = &'a T>>(iter: I) -> Dynamic<T> {
         let mut v = Self::new();
         for item in iter {
             v.push(item);
@@ -36,12 +47,39 @@ impl<'a, T: StrLike + ?Sized, S: 'a + AsRef<T>> FromIterator<&'a S> for Dynamic<
         v
     }
 }
-impl<'a, T: StrLike + ?Sized, S: 'a + AsRef<T>> Extend<&'a S> for Dynamic<T> {
+impl<'a, T: StrLike + ?Sized> FromIterator<&'a &'a T> for Dynamic<T> {
     #[inline]
-    fn extend<I: IntoIterator<Item = &'a S>>(&mut self, iter: I) {
+    fn from_iter<I: IntoIterator<Item = &'a &'a T>>(iter: I) -> Dynamic<T> {
+        let mut v = Self::new();
+        for &item in iter {
+            v.push(item);
+        }
+        v
+    }
+}
+impl<'a, T: StrLike + ?Sized> Extend<&'a &'a T> for Dynamic<T> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = &'a &'a T>>(&mut self, iter: I) {
+        for &item in iter {
+            self.push(item);
+        }
+    }
+}
+impl<'a, T: StrLike + ?Sized> Extend<&'a T> for Dynamic<T> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         for item in iter {
             self.push(item);
         }
+    }
+}
+impl<'a, T: StrLike + ?Sized> IntoIterator for &'a Dynamic<T> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    #[inline]
+    fn into_iter(self) -> Iter<'a, T> {
+        self.iter()
     }
 }
 
@@ -163,10 +201,10 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
     }
 
     /// Adds a string to the end of the vec.
-    pub fn push<S: AsRef<T>>(&mut self, s: &S) {
-        let s = s.as_ref().to_data();
-        let split = self.split.last().cloned().unwrap_or(0) + s.len();
-        self.buffer.to_mut().push_ref_back(s);
+    pub fn push(&mut self, t: &T) {
+        let t = t.to_data();
+        let split = self.split.last().cloned().unwrap_or(0) + t.len();
+        self.buffer.to_mut().push_ref_back(t);
         self.split.push(split);
     }
 
@@ -184,15 +222,21 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
     /// Removes a string from the end of the vec and allocates it onto a new buffer.
     pub fn pop_off(&mut self) -> Option<<T as ToOwned>::Owned> {
         /// TODO: why do I need this?
+        #[cfg_attr(test, allow(inline_always))]
         #[inline(always)]
         fn hack<T: ?Sized + ::len_trait::IndexRanges>(val: &T, idx: usize) -> &T {
             &val[idx..]
         }
-        self.split.pop().map(|idx| unsafe {
-            let ret = T::from_data_unchecked(hack(&self.buffer, idx)).to_owned();
-            self.buffer.to_mut().truncate(idx);
-            ret
-        })
+
+        if self.split.pop().is_none() {
+            return None;
+        }
+
+        let idx = self.split.last().cloned().unwrap_or(0);
+
+        let ret = unsafe { T::from_data_unchecked(hack(&self.buffer, idx)).to_owned() };
+        self.buffer.to_mut().truncate(idx);
+        Some(ret)
     }
 
     /// Returns an iterator over the strings in the vector.
@@ -202,10 +246,11 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
     }
 }
 
-impl<T: StrLike> Index<usize> for Dynamic<T> {
+impl<T: ?Sized + StrLike> Index<usize> for Dynamic<T> {
     type Output = T;
     #[inline]
     fn index(&self, index: usize) -> &T {
+        assert_ne!(index, self.len());
         unsafe {
             let split = Split::new(&*self.split);
             T::from_data_unchecked(split.get(index).index_into(&*self.buffer))
@@ -213,7 +258,64 @@ impl<T: StrLike> Index<usize> for Dynamic<T> {
     }
 }
 
-impl<T: StrLike + ?Sized> Clone for Dynamic<T>
+impl<T: ?Sized + StrLike + StrLikeMut> IndexMut<usize> for Dynamic<T>
+    where T::Data: IndexRangesMut,
+          T::OwnedData: BorrowMut<T::Data>
+{
+    #[inline]
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        assert_ne!(index, self.len());
+        unsafe {
+            let idx = Split::new(&*self.split).get(index);
+            T::from_data_mut_unchecked(idx.index_into_mut(self.buffer.to_mut().borrow_mut()))
+        }
+    }
+}
+
+impl<T: ?Sized + DataConcat> Index<Range<usize>> for Dynamic<T> {
+    type Output = T;
+    #[inline]
+    fn index(&self, range: Range<usize>) -> &T {
+        unsafe {
+            let split = Split::new(&*self.split);
+            T::from_data_unchecked(split.get_slice(range.into()).index_into(&*self.buffer))
+        }
+    }
+}
+
+impl<T: ?Sized + DataConcat> Index<RangeFrom<usize>> for Dynamic<T> {
+    type Output = T;
+    #[inline]
+    fn index(&self, range: RangeFrom<usize>) -> &T {
+        unsafe {
+            let split = Split::new(&*self.split);
+            T::from_data_unchecked(split.get_slice(range.into()).index_into(&*self.buffer))
+        }
+    }
+}
+
+impl<T: ?Sized + DataConcat> Index<RangeTo<usize>> for Dynamic<T> {
+    type Output = T;
+    #[inline]
+    fn index(&self, range: RangeTo<usize>) -> &T {
+        unsafe {
+            let split = Split::new(&*self.split);
+            T::from_data_unchecked(split.get_slice(range.into()).index_into(&*self.buffer))
+        }
+    }
+}
+
+impl<T: ?Sized + DataConcat> Index<RangeFull> for Dynamic<T> {
+    type Output = T;
+    #[inline]
+    fn index(&self, _: RangeFull) -> &T {
+        unsafe {
+            T::from_data_unchecked(&*self.buffer)
+        }
+    }
+}
+
+impl<T: ?Sized + StrLike> Clone for Dynamic<T>
     where Cow<'static, T::Data>: Clone
 {
     fn clone(&self) -> Dynamic<T> {
@@ -228,7 +330,7 @@ impl<T: StrLike + ?Sized> Clone for Dynamic<T>
     }
 }
 
-impl<T: StrLike + ?Sized> ::std::hash::Hash for Dynamic<T>
+impl<T: ?Sized + StrLike> ::std::hash::Hash for Dynamic<T>
     where T::Data: ::std::hash::Hash
 {
     fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
@@ -237,44 +339,95 @@ impl<T: StrLike + ?Sized> ::std::hash::Hash for Dynamic<T>
     }
 }
 
-impl<T: StrLike + PartialEq> PartialEq for Dynamic<T> {
+impl<T: ?Sized + StrLike + PartialEq> PartialEq for Dynamic<T> {
     fn eq(&self, rhs: &Dynamic<T>) -> bool {
         self.iter().eq(rhs.iter())
     }
 }
 
-impl<T: StrLike + Eq> Eq for Dynamic<T> {}
-
-impl<T: StrLike + PartialOrd> PartialOrd for Dynamic<T> {
-    fn partial_cmp(&self, rhs: &Dynamic<T>) -> Option<Ordering> {
-        self.iter().partial_cmp(rhs.iter())
-    }
-    fn lt(&self, rhs: &Dynamic<T>) -> bool {
-        self.iter().lt(rhs.iter())
-    }
-    fn le(&self, rhs: &Dynamic<T>) -> bool {
-        self.iter().le(rhs.iter())
-    }
-    fn gt(&self, rhs: &Dynamic<T>) -> bool {
-        self.iter().gt(rhs.iter())
-    }
-    fn ge(&self, rhs: &Dynamic<T>) -> bool {
-        self.iter().ge(rhs.iter())
+impl<'a, T: ?Sized + StrLike + PartialEq> PartialEq<&'a [&'a T]> for Dynamic<T> {
+    fn eq(&self, rhs: &&'a [&'a T]) -> bool {
+        self.iter().eq(rhs.iter().cloned())
     }
 }
 
-impl<T: StrLike + Ord> Ord for Dynamic<T> {
+impl<'a, T: ?Sized + StrLike + PartialEq> PartialEq<Vec<&'a T>> for Dynamic<T> {
+    fn eq(&self, rhs: &Vec<&'a T>) -> bool {
+        self.iter().eq(rhs.iter().cloned())
+    }
+}
+
+/*
+impl<T: ?Sized + StrLike + PartialEq> PartialEq<Vec<T::Owned>> for Dynamic<T> {
+    fn eq(&self, rhs: &Vec<T::Owned>) -> bool {
+        self.iter().eq(rhs.iter().map(|s| &*s))
+    }
+}
+*/
+
+impl<T: ?Sized + StrLike + Eq> Eq for Dynamic<T> {}
+
+impl<T: ?Sized + StrLike + PartialOrd> PartialOrd for Dynamic<T> {
+    fn partial_cmp(&self, rhs: &Dynamic<T>) -> Option<Ordering> {
+        self.iter().partial_cmp(rhs.iter())
+    }
+}
+
+impl<'a, T: ?Sized + StrLike + PartialOrd> PartialOrd<&'a [&'a T]> for Dynamic<T> {
+    fn partial_cmp(&self, rhs: &&'a [&'a T]) -> Option<Ordering> {
+        self.iter().partial_cmp(rhs.iter().cloned())
+    }
+}
+
+impl<'a, T: ?Sized + StrLike + PartialOrd> PartialOrd<Vec<&'a T>> for Dynamic<T> {
+    fn partial_cmp(&self, rhs: &Vec<&'a T>) -> Option<Ordering> {
+        self.iter().partial_cmp(rhs.iter().cloned())
+    }
+}
+
+/*
+impl<T: ?Sized + StrLike + PartialOrd> PartialOrd<Vec<T::Owned>> for Dynamic<T> {
+    fn partial_cmp(&self, rhs: &Vec<T::Owned>) -> Option<Ordering> {
+        self.iter().partial_cmp(rhs.iter().map(|s| &*s))
+    }
+}
+*/
+
+impl<T: ?Sized + StrLike + Ord> Ord for Dynamic<T> {
     fn cmp(&self, rhs: &Dynamic<T>) -> Ordering {
         self.iter().cmp(rhs.iter())
     }
 }
 
-impl<T: StrLike + fmt::Debug + ?Sized> fmt::Debug for Dynamic<T> {
+impl<T: ?Sized + StrLike + fmt::Debug> fmt::Debug for Dynamic<T> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list()
             .entries(self.iter())
             .finish()
+    }
+}
+
+impl<T: ?Sized + StrLike> Arbitrary for Dynamic<T>
+    where T::Owned: Arbitrary,
+          Dynamic<T>: Send + Sync
+{
+    fn arbitrary<G: ::quickcheck::Gen>(g: &mut G) -> Dynamic<T> {
+        let mut vec = Dynamic::new();
+
+        let size = g.size();
+        let size = g.gen_range(0, size);
+        for _ in 0..size {
+            let s: <T as ToOwned>::Owned = Arbitrary::arbitrary(g);
+            vec.push(s.borrow());
+        }
+
+        vec
+    }
+
+    fn shrink(&self) -> Box<Iterator<Item=Dynamic<T>>> {
+        let new_self: Vec<<T as ToOwned>::Owned> = self.iter().map(ToOwned::to_owned).collect();
+        Box::new(new_self.shrink().map(|v| v.iter().map(|s| s.borrow()).collect()))
     }
 }
 
@@ -289,3 +442,154 @@ pub type CStringVec = Dynamic<CStr>;
 
 ///// Vec of immutable `OsStr`s stored on the heap in the same buffer.
 //pub type OsStringVec = Dynamic<OsStr>;
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::CStr;
+
+    use super::super::StrLike;
+    use super::Dynamic;
+
+    fn test_cmp<T: ?Sized + StrLike + PartialOrd + ::std::fmt::Debug>(test_slice: &[&T]) {
+        let test_vec = test_slice.to_owned();
+
+        let vec = test_slice.iter().collect::<Dynamic<T>>();
+        let collect = vec.iter().collect::<Vec<_>>();
+
+        assert_eq!(vec, test_slice);
+        assert_eq!(vec, test_vec);
+        assert_eq!(collect, test_vec);
+    }
+
+    #[test]
+    fn slice() {
+        test_cmp::<[u8]>(&[&b"hello"[..], &b"world"[..], &b"123"[..]]);
+    }
+
+    #[test]
+    fn str() {
+        test_cmp::<str>(&["what", "a", "wonderful", "day"]);
+    }
+
+    #[test]
+    fn c_str() {
+        test_cmp::<CStr>(&[CStr::from_bytes_with_nul(&b"just\0"[..]).unwrap(),
+                           CStr::from_bytes_with_nul(&b"testing\0"[..]).unwrap()]);
+    }
+
+    #[test]
+    fn debug() {
+        let vec = ["English", "Français", "中文"].iter().collect::<Dynamic<str>>();
+        assert_eq!(format!("{:?}", vec), r#"["English", "Français", "中文"]"# )
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_oob() {
+        let vec = <Dynamic<[u8]>>::new();
+        let _ = &vec[0];
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_oob_str() {
+        let vec = <Dynamic<str>>::new();
+        let _ = &vec[0];
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_oob_c_str() {
+        let vec = <Dynamic<CStr>>::new();
+        let _ = &vec[0];
+    }
+
+    #[test]
+    fn index() {
+        let vec = ["English", "Français", "中文"].iter().collect::<Dynamic<str>>();
+        assert_eq!(&vec[0], "English");
+        assert_eq!(&vec[1], "Français");
+        assert_eq!(&vec[2], "中文");
+        assert_eq!(&vec[0..0], "");
+        assert_eq!(&vec[0..1], "English");
+        assert_eq!(&vec[0..2], "EnglishFrançais");
+        assert_eq!(&vec[0..3], "EnglishFrançais中文");
+        assert_eq!(&vec[1..1], "");
+        assert_eq!(&vec[1..2], "Français");
+        assert_eq!(&vec[1..3], "Français中文");
+        assert_eq!(&vec[2..2], "");
+        assert_eq!(&vec[2..3], "中文");
+        assert_eq!(&vec[3..3], "");
+        assert_eq!(&vec[0..], "EnglishFrançais中文");
+        assert_eq!(&vec[1..], "Français中文");
+        assert_eq!(&vec[2..], "中文");
+        assert_eq!(&vec[3..], "");
+        assert_eq!(&vec[..0], "");
+        assert_eq!(&vec[..1], "English");
+        assert_eq!(&vec[..2], "EnglishFrançais");
+        assert_eq!(&vec[..3], "EnglishFrançais中文");
+        assert_eq!(&vec[..], "EnglishFrançais中文");
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_oob_nonempty() {
+        let vec = ["English", "Français", "中文"].iter().collect::<Dynamic<str>>();
+        let _ = &vec[3];
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_left_oob() {
+        let vec = ["English", "Français", "中文"].iter().collect::<Dynamic<str>>();
+        let _ = &vec[4..];
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_right_oob() {
+        let vec = ["English", "Français", "中文"].iter().collect::<Dynamic<str>>();
+        let _ = &vec[..4];
+    }
+
+    #[test]
+    fn ord() {
+        let fst = ["aha"].iter().collect::<Dynamic<str>>();
+        let snd = ["ah", "a"].iter().collect::<Dynamic<str>>();
+        let thd = ["a", "ha"].iter().collect::<Dynamic<str>>();
+        let fth = ["a", "a"].iter().collect::<Dynamic<str>>();
+        let slc = &mut [&fst, &snd, &thd, &fth];
+        slc.sort();
+        assert_eq!(slc, &[&fth, &thd, &snd, &fst]);
+    }
+
+    quickcheck! {
+        fn pop_off(vec: Dynamic<str>) -> bool {
+            let mut vec = vec;
+
+            let cloned = vec.clone();
+
+            let mut owned = Vec::new();
+            while let Some(item) = vec.pop_off() {
+                owned.push(item);
+            }
+            owned.iter().rev().eq(cloned.iter())
+        }
+
+        fn extend(vec: Vec<String>) -> bool {
+            let mut extend = <Dynamic<str>>::new();
+            extend.extend(vec.iter().map(String::as_str));
+            let collect = vec.iter().map(String::as_str).collect::<Dynamic<str>>();
+            extend == collect
+        }
+    }
+
+    #[test]
+    fn pop() {
+        let mut vec = ["English", "Français", "中文"].iter().collect::<Dynamic<str>>();
+        assert_eq!(vec.pop(), true);
+        assert_eq!(vec.pop(), true);
+        assert_eq!(vec.pop(), true);
+        assert_eq!(vec.pop(), false);
+    }
+}

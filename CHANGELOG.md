@@ -1,5 +1,10 @@
 This project follows semantic versioning.
 
+# 0.4.0
+
+* [added] Lots and lots of tests
+* [fixed] Type signatures that caused incorrect results
+
 # 0.3.0
 
 * [changed] Now generic over string types
