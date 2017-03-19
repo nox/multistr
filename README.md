@@ -1,9 +1,8 @@
 multistr
 ========
 
-Ways to store multiple strings in the same heap buffer. Only allows pairs and
-triples for now. You may freely use and modify this code under the
-[CC0 1.0 Universal License](LICENSE).
+Store multiple strings on the same heap buffer. You may freely use and modify
+this code under the [CC0 1.0 Universal License](LICENSE).
 
 Usage
 -----
@@ -12,7 +11,7 @@ To use in your own project, just add the below to your `Cargo.toml` file.
 
 ```toml
 [dependencies]
-multistr = "0.2"
+multistr = "0.3"
 ```
 
 For more formal documentation, you can find the rustdoc

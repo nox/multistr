@@ -1,5 +1,11 @@
 This project follows semantic versioning.
 
+# 0.3.0
+
+* [changed] Now generic over string types
+* [removed] `StringPair` and `StringTriple` are now `StringArray*` and have
+            slightly different semantics
+
 # 0.2.1
 
 * [added] Indexing for `StringVec` works

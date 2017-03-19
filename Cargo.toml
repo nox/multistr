@@ -1,10 +1,10 @@
 [package]
 name = "multistr"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Clar Charr <clar@charr.xyz>"]
 repository = "https://github.com/clarcharr/multistr"
 documentation = "https://clarcharr.github.io/multistr/multistr/"
-description = "Multiple strings stored in the same heap buffer."
+description = "Store multiple strings in the same heap buffer."
 readme = "README.md"
 license-file = "LICENSE"
 exclude = [".gitignore"]
