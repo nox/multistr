@@ -1,5 +1,9 @@
 This project follows semantic versioning.
 
+# 0.5.1
+
+* [changed] `quickcheck` is now optional
+
 # 0.5.0
 
 * [changed] Bumped dependencies

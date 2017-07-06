@@ -9,7 +9,6 @@ use std::iter::FromIterator;
 use extra_default::DefaultRef;
 use len_trait::{Capacity, CapacityMut, WithCapacity, Len, LenMut, Clear, SplitAtMut};
 use push_trait::PushCopyBack;
-use quickcheck::Arbitrary;
 
 use super::{Split, StrLike, Iter, DataConcat, StrLikeMut};
 
@@ -407,8 +406,9 @@ impl<T: ?Sized + StrLike + fmt::Debug> fmt::Debug for Dynamic<T> {
     }
 }
 
-impl<T: ?Sized + StrLike> Arbitrary for Dynamic<T>
-    where T::Owned: Arbitrary,
+#[cfg(feature = "quickcheck")]
+impl<T: ?Sized + StrLike> quickcheck::Arbitrary for Dynamic<T>
+    where T::Owned: quickcheck::Arbitrary,
           Dynamic<T>: Send + Sync
 {
     fn arbitrary<G: ::quickcheck::Gen>(g: &mut G) -> Dynamic<T> {
@@ -417,7 +417,7 @@ impl<T: ?Sized + StrLike> Arbitrary for Dynamic<T>
         let size = g.size();
         let size = g.gen_range(0, size);
         for _ in 0..size {
-            let s: <T as ToOwned>::Owned = Arbitrary::arbitrary(g);
+            let s: <T as ToOwned>::Owned = quickcheck::Arbitrary::arbitrary(g);
             vec.push(s.borrow());
         }
 

@@ -1,6 +1,6 @@
 [package]
 name = "multistr"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Clar Charr <clar@charr.xyz>"]
 repository = "https://github.com/clarcharr/multistr"
 documentation = "https://clarcharr.github.io/multistr/multistr/"
@@ -14,8 +14,11 @@ bow = "1.0"
 extra-default = "0.2"
 len-trait = { version = "0.6", features = ["std"] }
 push-trait = { version = "0.5", features = ["std"] }
-quickcheck = "0.4"
+quickcheck = { version = "0.4", optional = true }
 void = "1.0"
+
+[dev-dependencies]
+quickcheck = "0.4"
 
 [features]
 inclusive_range = []

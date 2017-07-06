@@ -9,6 +9,7 @@ extern crate len_trait;
 extern crate push_trait;
 extern crate void;
 
+#[cfg(feature = "quickcheck")]
 #[cfg_attr(test, macro_use)]
 extern crate quickcheck;
 
