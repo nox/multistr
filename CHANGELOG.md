@@ -1,5 +1,14 @@
 This project follows semantic versioning.
 
+# 0.5.0
+
+* [changed] Bumped dependencies
+* [fixed] Works on stable
+
+# 0.4.1
+
+* [changed] Bumped `len-trait` version
+
 # 0.4.0
 
 * [added] Lots and lots of tests

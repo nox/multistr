@@ -4,8 +4,8 @@ use std::fmt;
 use std::ops::{Index, IndexMut, Range, RangeTo, RangeFrom, RangeFull};
 
 use bow::Bow;
-use len_trait::{Len, IndexRangesMut};
-use push_trait::PushRefBack;
+use len_trait::{Len, SplitAtMut};
+use push_trait::PushCopyBack;
 
 macro_rules! gen_impl {
     ($($name:ident, $slice_name:ident, $str_name:ident, $c_str_name:ident, $os_str_name:ident, $n:expr,)*) => {
@@ -31,10 +31,10 @@ macro_rules! gen_impl {
 
                     let mut split = [len; $n];
                     let mut acc = 0;
-                    for s in split.iter_mut() {
+                    for s in &mut split {
                         *s = acc;
                         acc += len;
-                        buffer.push_ref_back(data);
+                        buffer.push_copy_back(data);
                     }
                     $name { buffer: Bow::Boxed(buffer.into()), split }
                 }
@@ -47,7 +47,7 @@ macro_rules! gen_impl {
 
                     let mut buffer: T::OwnedData = Default::default();
                     for item in inner.iter() {
-                        buffer.push_ref_back(item.to_data());
+                        buffer.push_copy_back(item.to_data());
                     }
                     let buffer: Box<T::Data> = buffer.into();
                     let buffer: Bow<'static, T::Data> = buffer.into();
@@ -77,7 +77,9 @@ macro_rules! gen_impl {
 
                 /// Creates a `Static` from its raw parts (unsafe version).
                 #[inline]
-                pub unsafe fn from_raw_unchecked<D: Into<Bow<'static, T::Data>>>(buffer: D, split: [usize; $n]) -> $name<T> {
+                pub unsafe fn from_raw_unchecked<D: Into<Bow<'static, T::Data>>>(buffer: D, split: [usize; $n]) -> $name<T>
+                where T::Data: 'static
+                {
                     let buffer = buffer.into();
                     $name { buffer, split }
                 }
@@ -101,7 +103,7 @@ macro_rules! gen_impl {
             }
 
             impl<T: ?Sized + $crate::StrLike + $crate::StrLikeMut> IndexMut<usize> for $name<T>
-                where T::Data: IndexRangesMut,
+                where T::Data: SplitAtMut<usize>,
                       T::OwnedData: BorrowMut<T::Data>
             {
                 #[inline]
@@ -259,7 +261,6 @@ gen_impl! {
 mod tests {
     use std::ffi::CStr;
 
-    use super::super::StrLike;
     use super::Static3;
 
     #[test]

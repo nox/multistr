@@ -1,6 +1,6 @@
 [package]
 name = "multistr"
-version = "0.4.0"
+version = "0.5.0"
 authors = ["Clar Charr <clar@charr.xyz>"]
 repository = "https://github.com/clarcharr/multistr"
 documentation = "https://clarcharr.github.io/multistr/multistr/"
@@ -10,14 +10,12 @@ license-file = "LICENSE"
 exclude = [".gitignore"]
 
 [dependencies]
-bow = "0.1"
-extra-default = "0.1"
-len-trait = { version = "0.2", default-features = false, features = ['collections'] }
-push-trait = { version = "0.4", default-features = false, features = ['collections'] }
-quickcheck = "0.3"
-
-[dev-dependencies]
-clippy = "^0.0"
+bow = "1.0"
+extra-default = "0.2"
+len-trait = { version = "0.6", features = ["std"] }
+push-trait = { version = "0.5", features = ["std"] }
+quickcheck = "0.4"
+void = "1.0"
 
 [features]
 inclusive_range = []

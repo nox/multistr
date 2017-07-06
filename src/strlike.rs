@@ -2,27 +2,29 @@ use std::borrow::{Borrow, BorrowMut};
 use std::ffi::{CStr, FromBytesWithNulError};
 use std::fmt;
 use std::mem;
+use std::ops::{Index, RangeFull};
 use std::str::{Utf8Error, from_utf8, from_utf8_unchecked};
 
 use bow::ToBox;
 use extra_default::DefaultRef;
-use len_trait::{CapacityMut, Len, SplitAt, SplitOff, IndexRangesMut};
-use push_trait::PushRefBack;
+use len_trait::{CapacityMut, Len, LenMut, SplitAt, SplitAtMut};
+use push_trait::PushCopyBack;
+use void::Void;
 
 /// Required for `StrLike::Data`.
-pub trait StrData: ToBox + SplitAt + DefaultRef {}
-impl<T: ?Sized + ToBox + SplitAt + DefaultRef> StrData for T {}
+pub trait StrData: ToBox + Len + SplitAt<usize> + Index<RangeFull, Output = Self> + DefaultRef {}
+impl<T: ?Sized + ToBox + Len + SplitAt<usize> + Index<RangeFull, Output = Self> + DefaultRef> StrData for T {}
 
 
 /// Required for `StrLike::OwnedData`.
-pub trait OwnsStrData<D: ?Sized>: SplitOff + CapacityMut + PushRefBack<D> + Into<Box<D>> {}
-impl<D: ?Sized, T: ?Sized + SplitOff + CapacityMut + PushRefBack<D> + Into<Box<D>>> OwnsStrData<D> for T {}
+pub trait OwnsStrData<D: ?Sized>: LenMut + CapacityMut + PushCopyBack<D> + Into<Box<D>> {}
+impl<D: ?Sized, T: ?Sized + LenMut + CapacityMut + PushCopyBack<D> + Into<Box<D>>> OwnsStrData<D> for T {}
 
 
 /// String-like container.
-pub trait StrLike: Len + ToOwned + DefaultRef {
+pub trait StrLike: Len + ToOwned + DefaultRef + 'static {
     /// Data backing this string.
-    type Data: ?Sized + StrData + ToOwned<Owned = Self::OwnedData>;
+    type Data: ?Sized + StrData + ToOwned<Owned = Self::OwnedData> + 'static;
 
     /// Owned data.
     type OwnedData: OwnsStrData<Self::Data> + Borrow<Self::Data>;
@@ -45,7 +47,7 @@ pub unsafe trait DataConcat: StrLike {}
 
 /// Extension to `StrLike`: has mutable version.
 pub trait StrLikeMut: StrLike
-    where Self::Data: IndexRangesMut,
+    where Self::Data: SplitAtMut<usize>,
           Self::OwnedData: BorrowMut<Self::Data>
 {
     /// Mutable version of `to_data`.
@@ -62,12 +64,12 @@ impl<T: 'static + Copy> StrLike for [T] {
     type Data = [T];
     type OwnedData = Vec<T>;
 
-    type ConvError = !;
+    type ConvError = Void;
 
     fn to_data(&self) -> &[T] {
         self
     }
-    fn from_data(data: &[T]) -> Result<&[T], !> {
+    fn from_data(data: &[T]) -> Result<&[T], Void> {
         Ok(data)
     }
     unsafe fn from_data_unchecked(data: &[T]) -> &[T] {
@@ -116,7 +118,7 @@ impl<T: 'static + Copy> StrLikeMut for [T] {
     unsafe fn to_data_mut(&mut self) -> &mut [T] {
         self
     }
-    fn from_data_mut(data: &mut [T]) -> Result<&mut [T], !> {
+    fn from_data_mut(data: &mut [T]) -> Result<&mut [T], Void> {
         Ok(data)
     }
     unsafe fn from_data_mut_unchecked(data: &mut [T]) -> &mut [T] {

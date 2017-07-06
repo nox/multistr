@@ -7,8 +7,8 @@ use std::fmt;
 use std::iter::FromIterator;
 
 use extra_default::DefaultRef;
-use len_trait::{Capacity, CapacityMut, DefaultCapacity, Len, LenMut, LenZero, SplitOff, IndexRangesMut};
-use push_trait::PushRefBack;
+use len_trait::{Capacity, CapacityMut, WithCapacity, Len, LenMut, Clear, SplitAtMut};
+use push_trait::PushCopyBack;
 use quickcheck::Arbitrary;
 
 use super::{Split, StrLike, Iter, DataConcat, StrLikeMut};
@@ -101,7 +101,7 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
     #[inline]
     pub fn with_capacities(num: usize, data: usize) -> Dynamic<T> {
         Dynamic {
-            buffer: Cow::Owned(DefaultCapacity::default_capacity(data)),
+            buffer: Cow::Owned(WithCapacity::with_capacity(data)),
             split: Vec::with_capacity(num),
         }
     }
@@ -158,7 +158,7 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
             }
         }
 
-        self.buffer.to_mut().push_ref_back(other.buffer.borrow());
+        self.buffer.to_mut().push_copy_back(other.buffer.borrow());
         other.buffer.to_mut().clear();
 
         self.split.append(&mut other.split);
@@ -204,7 +204,7 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
     pub fn push(&mut self, t: &T) {
         let t = t.to_data();
         let split = self.split.last().cloned().unwrap_or(0) + t.len();
-        self.buffer.to_mut().push_ref_back(t);
+        self.buffer.to_mut().push_copy_back(t);
         self.split.push(split);
     }
 
@@ -222,9 +222,8 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
     /// Removes a string from the end of the vec and allocates it onto a new buffer.
     pub fn pop_off(&mut self) -> Option<<T as ToOwned>::Owned> {
         /// TODO: why do I need this?
-        #[cfg_attr(test, allow(inline_always))]
-        #[inline(always)]
-        fn hack<T: ?Sized + ::len_trait::IndexRanges>(val: &T, idx: usize) -> &T {
+        #[inline]
+        fn hack<T: ?Sized + ::len_trait::IndexRange<usize> + Index<RangeFull, Output = T>>(val: &T, idx: usize) -> &T {
             &val[idx..]
         }
 
@@ -259,7 +258,7 @@ impl<T: ?Sized + StrLike> Index<usize> for Dynamic<T> {
 }
 
 impl<T: ?Sized + StrLike + StrLikeMut> IndexMut<usize> for Dynamic<T>
-    where T::Data: IndexRangesMut,
+    where T::Data: SplitAtMut<usize>,
           T::OwnedData: BorrowMut<T::Data>
 {
     #[inline]
