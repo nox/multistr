@@ -8,7 +8,7 @@ use std::iter::FromIterator;
 
 use extra_default::DefaultRef;
 use len_trait::{Capacity, CapacityMut, WithCapacity, Len, LenMut, Clear, SplitAtMut};
-use push_trait::PushCopyBack;
+use push_trait::PushBack;
 
 use super::{Split, StrLike, Iter, DataConcat, StrLikeMut};
 
@@ -157,7 +157,7 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
             }
         }
 
-        self.buffer.to_mut().push_copy_back(other.buffer.borrow());
+        self.buffer.to_mut().push_back(other.buffer.borrow());
         other.buffer.to_mut().clear();
 
         self.split.append(&mut other.split);
@@ -203,7 +203,7 @@ impl<T: StrLike + ?Sized> Dynamic<T> {
     pub fn push(&mut self, t: &T) {
         let t = t.to_data();
         let split = self.split.last().cloned().unwrap_or(0) + t.len();
-        self.buffer.to_mut().push_copy_back(t);
+        self.buffer.to_mut().push_back(t);
         self.split.push(split);
     }
 

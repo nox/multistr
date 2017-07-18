@@ -8,7 +8,7 @@ use std::str::{Utf8Error, from_utf8, from_utf8_unchecked};
 use bow::ToBox;
 use extra_default::DefaultRef;
 use len_trait::{CapacityMut, Len, LenMut, SplitAt, SplitAtMut};
-use push_trait::PushCopyBack;
+use push_trait::PushBack;
 use void::Void;
 
 /// Required for `StrLike::Data`.
@@ -17,8 +17,8 @@ impl<T: ?Sized + ToBox + Len + SplitAt<usize> + Index<RangeFull, Output = Self> 
 
 
 /// Required for `StrLike::OwnedData`.
-pub trait OwnsStrData<D: ?Sized>: LenMut + CapacityMut + PushCopyBack<D> + Into<Box<D>> {}
-impl<D: ?Sized, T: ?Sized + LenMut + CapacityMut + PushCopyBack<D> + Into<Box<D>>> OwnsStrData<D> for T {}
+pub trait OwnsStrData<D: ?Sized>: LenMut + CapacityMut + for<'a> PushBack<&'a D> + Into<Box<D>> {}
+impl<D: ?Sized, T: ?Sized + LenMut + CapacityMut + for<'a> PushBack<&'a D> + Into<Box<D>>> OwnsStrData<D> for T {}
 
 
 /// String-like container.

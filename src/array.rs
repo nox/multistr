@@ -5,7 +5,7 @@ use std::ops::{Index, IndexMut, Range, RangeTo, RangeFrom, RangeFull};
 
 use bow::Bow;
 use len_trait::{Len, SplitAtMut};
-use push_trait::PushCopyBack;
+use push_trait::PushBack;
 
 macro_rules! gen_impl {
     ($($name:ident, $slice_name:ident, $str_name:ident, $c_str_name:ident, $os_str_name:ident, $n:expr,)*) => {
@@ -34,7 +34,7 @@ macro_rules! gen_impl {
                     for s in &mut split {
                         *s = acc;
                         acc += len;
-                        buffer.push_copy_back(data);
+                        buffer.push_back(data);
                     }
                     $name { buffer: Bow::Boxed(buffer.into()), split }
                 }
@@ -47,7 +47,7 @@ macro_rules! gen_impl {
 
                     let mut buffer: T::OwnedData = Default::default();
                     for item in inner.iter() {
-                        buffer.push_copy_back(item.to_data());
+                        buffer.push_back(item.to_data());
                     }
                     let buffer: Box<T::Data> = buffer.into();
                     let buffer: Bow<'static, T::Data> = buffer.into();

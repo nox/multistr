@@ -13,7 +13,7 @@ exclude = [".gitignore"]
 bow = "1.0"
 extra-default = "0.2"
 len-trait = { version = "0.6", features = ["std"] }
-push-trait = { version = "0.5", features = ["std"] }
+push-trait = { version = "0.6", features = ["std"] }
 quickcheck = { version = "0.4", optional = true }
 void = "1.0"
 
