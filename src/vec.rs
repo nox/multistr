@@ -430,8 +430,8 @@ impl<T: ?Sized + StrLike> quickcheck::Arbitrary for Dynamic<T>
     }
 }
 
-/// Ve of immutable slices stored on the heap in the same buffer.
-pub type SliceVec<T: 'static + Copy> = Dynamic<[T]>;
+/// Vec of immutable slices stored on the heap in the same buffer.
+pub type SliceVec<T> = Dynamic<[T]>;
 
 /// Vec of immutable `str`s stored on the heap in the same buffer.
 pub type StringVec = Dynamic<str>;

@@ -225,7 +225,7 @@ macro_rules! gen_impl {
             }
 
             /// Array of immutable slices stored on the heap in the same buffer.
-            pub type $slice_name<T: 'static + Copy> = $name<[T]>;
+            pub type $slice_name<T> = $name<[T]>;
 
             /// Array of immutable `str`s stored on the heap in the same buffer.
             pub type $str_name = $name<str>;
